@@ -1,0 +1,45 @@
+package view
+
+templ baseTemplate(title string) {
+	<!DOCTYPE html>
+	<html>
+		@headTemplate(title)
+		<body hx-boost="true" id="main">
+			@headerTemplate()
+			<main class="container">
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ headTemplate(title string) {
+	<head>
+		<link
+			rel="stylesheet"
+			href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css"
+		/>
+		<link
+			rel="stylesheet"
+			href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.colors.min.css"
+		/>
+		<script nonce={ getNonce(ctx) } src="/static/htmx.min.js"></script>
+		<title>{ title }</title>
+	</head>
+}
+
+templ headerTemplate() {
+	<header class="container">
+		<h4>Biblioteca</h4>
+	</header>
+}
+
+templ footerTemplate() {
+	<footer class="container">
+		grepvenancio
+	</footer>
+}
+
+func getNonce(ctx context.Context) string {
+	return ctx.Value("nonce").(string)
+}

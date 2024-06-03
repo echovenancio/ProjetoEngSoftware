@@ -1,0 +1,2 @@
+.env
+/view/**/*_templ.go

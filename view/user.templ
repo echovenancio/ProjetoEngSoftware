@@ -1,0 +1,417 @@
+package view
+
+import "github.com/grepvenancio/biblioteca/model"
+import "github.com/grepvenancio/biblioteca/errors"
+import "github.com/grepvenancio/biblioteca/view/components"
+import "github.com/grepvenancio/biblioteca/view/helpers"
+import "fmt"
+import "github.com/google/uuid"
+
+templ PreferencesPage() {
+	@baseTemplate("Preferências") {
+		if msg := helpers.GetFlash(ctx); msg != "" {
+			<section>
+				<mark>
+					{ msg }
+				</mark>
+			</section>
+		}
+		@NamePreferences("", "")
+		<hr/>
+		<section>
+			<h2>Area sensível</h2>
+			if v := ctx.Value("session-struct").(model.SessionData); v.HasMfa {
+				<details open>
+					<summary>Mudar Email</summary>
+					<p>
+						@EmailPreferences("", "")
+					</p>
+				</details>
+				<details open>
+					<summary>Mudar Senha</summary>
+					<p>
+						@PassordPreference(
+							model.PasswordRecoverUser{},
+							errors.FormError{})
+					</p>
+				</details>
+			} else {
+				<h2>Habilite TOTP para mudar o email ou senha.</h2>
+				@EnableMFAButton()
+			}
+		</section>
+	}
+}
+
+templ PassordPreference(
+	passwd model.PasswordRecoverUser, errors errors.FormError) {
+}
+
+templ TOTPDialog(errorMsg string) {
+	<dialog open id="totp-dialog" hx-target="#totp-input">
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev"></button>
+				<p>
+					<strong>Código TOTP</strong>
+				</p>
+			</header>
+			<form
+				hx-post="/user/preferences/totp/verify"
+			>
+				<p id="totp-input">
+					@TOTPInput(errorMsg)
+				</p>
+				<input type="submit" value="Enviar código"/>
+			</form>
+		</article>
+	</dialog>
+}
+
+templ TOTPInput(errorMsg string) {
+	@components.InputField(components.InputFieldParams{
+		FieldName:  "totp-code",
+		FieldValue: "",
+		InputLabel: "Código TOTP",
+		InputType:  "text",
+		InputAttr:  nil,
+		ErrorMsg:   errorMsg,
+	})
+}
+
+templ NamePreferences(name, nameErr string) {
+	<form
+		hx-put="/user/preferences/name"
+		id="name-pref"
+		hx-swap-oob="true"
+	>
+		@components.InputField(components.InputFieldParams{
+			FieldName:  "name",
+			FieldValue: name,
+			InputLabel: "Nome completo",
+			InputType:  "text",
+			InputAttr:  nil,
+			ErrorMsg:   nameErr,
+		})
+		<input type="submit" value="atualizar nome"/>
+	</form>
+}
+
+templ TOTPConfirmationPage(totpKey, errorMsg, ticketID string) {
+	@baseTemplate("Confirmação totp") {
+		<span
+			hx-get={ fmt.Sprintf(
+	"/user/preferences/totp/image/%s", ticketID) }
+			hx-trigger="load"
+		>
+			<span aria-busy="true" class="htmx-indicator"></span>
+		</span>
+		<p>
+			Chave: { totpKey }
+		</p>
+		<form
+			hx-put={ fmt.Sprintf(
+	"/user/preferences/totp/confirm/%s", ticketID) }
+			hx-target="#main"
+		>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "totp-code",
+				FieldValue: "",
+				InputLabel: "Código TOTP",
+				InputType:  "text",
+				InputAttr:  nil,
+				ErrorMsg:   errorMsg,
+			})
+			<input type="submit" value="confirmar habilitação de TOTP"/>
+		</form>
+		<button
+			hx-delete={ fmt.Sprintf(
+	"/user/preferences/totp/%s", ticketID) }
+			hx-target="#main"
+		>
+			Cancelar habilitação de TOTP
+		</button>
+	}
+}
+
+templ TOTPImage(data string) {
+	<img src={ fmt.Sprintf("data:image/png;base64,%s", data) }/>
+}
+
+templ TOTPRequest(errorMsg string) {
+	@baseTemplate("Verificação de indentidade") {
+		<form hx-post="/user/preferences/totp/verify" hx-target="#main">
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "totp-code",
+				FieldValue: "",
+				InputLabel: "Código TOTP",
+				InputType:  "text",
+				InputAttr:  nil,
+				ErrorMsg:   errorMsg,
+			})
+			<input type="submit" value="Enviar código"/>
+		</form>
+	}
+}
+
+templ EmailPreferences(email, emailErr string) {
+	<form
+		hx-target="#main"
+		hx-swap="beforeend"
+		hx-put="/user/preferences/email"
+		id="email-pref"
+		hx-swap-oob="true"
+	>
+		@components.InputField(components.InputFieldParams{
+			FieldName:  "email",
+			FieldValue: email,
+			InputLabel: "e-mail",
+			InputType:  "email",
+			InputAttr:  nil,
+			ErrorMsg:   emailErr,
+		})
+		<input type="submit" value="atualizar email"/>
+	</form>
+}
+
+templ EnableMFAButton() {
+	<button
+		hx-push-url="true"
+		hx-target="#main"
+		hx-put="/user/preferences/totp"
+	>Habilitar TOTP</button>
+}
+
+templ SignUpUserPage(user model.UserSignUp, errors errors.FormError) {
+	@baseTemplate("Cadastro") {
+		<form hx-post="/signup" hx-target="#main">
+			@UserFieldSet(user, errors, "Cadastrar")
+		</form>
+	}
+}
+
+templ ResultSignUpActionPage(result string, msg string) {
+	@baseTemplate("Cadastro") {
+		if result == "pending" {
+			<h1 class="pending">{ msg }</h1>
+		} else if result == "confirmation" {
+			<h1 class="confirmation">{ msg }</h1>
+		} else if result == "retry" {
+			<h1>Validação expirada</h1>
+			<div>
+				<input
+					name="email"
+					style="display: none"
+					type="email"
+					value={ msg }
+				/>
+				<button
+					hx-post="/signup/retry"
+					hx-include="[name='email']"
+					hx-push-url="true"
+					hx-target="#main"
+				>
+					Clique aqui para re-enviar um email de confirmação
+				</button>
+			</div>
+		} else {
+			<h1 class="fail">{ msg }</h1>
+		}
+	}
+}
+
+templ UserHomePage() {
+	@baseTemplate("Home") {
+		<h1>Based</h1>
+	}
+}
+
+templ LoginPage(user model.UserLogin, errors errors.FormError) {
+	@baseTemplate("Login") {
+		if msg := helpers.GetFlash(ctx); msg != "" {
+			<section>
+				<mark>
+					{ msg }
+				</mark>
+			</section>
+		}
+		<form
+			hx-post="login"
+			hx-target="#main"
+			hx-swap="beforeend"
+		>
+			<fieldset>
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "email",
+						FieldValue: user.Email,
+						InputLabel: "e-mail",
+						InputType:  "email",
+						InputAttr:  nil,
+						ErrorMsg:   "",
+					})
+				</p>
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "passwd",
+						FieldValue: user.Password,
+						InputLabel: "Senha",
+						InputType:  "password",
+						InputAttr:  nil,
+						ErrorMsg:   "",
+					})
+				</p>
+				<input type="submit" value="Log-in"/>
+			</fieldset>
+		</form>
+	}
+}
+
+templ UserFieldSet(user model.UserSignUp, errors errors.FormError, btnText string) {
+	<fieldset>
+		<div class="grid">
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "email",
+					FieldValue: user.Email,
+					InputLabel: "e-mail",
+					InputType:  "email",
+					InputAttr:  nil,
+					ErrorMsg:   errors["email"],
+				})
+			</p>
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "name",
+					FieldValue: user.Name,
+					InputLabel: "Nome completo",
+					InputType:  "text",
+					InputAttr:  nil,
+					ErrorMsg:   errors["name"],
+				})
+			</p>
+		</div>
+		<p>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "passwd",
+				FieldValue: user.Password,
+				InputLabel: "Senha",
+				InputType:  "password",
+				InputAttr:  nil,
+				ErrorMsg:   errors["passwd"],
+			})
+		</p>
+		<p>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "confpasswd",
+				FieldValue: user.Password,
+				InputLabel: "Confirmar Senha",
+				InputType:  "password",
+				InputAttr:  nil,
+				ErrorMsg:   errors["confpasswd"],
+			})
+		</p>
+		<input type="submit" value={ btnText }/>
+	</fieldset>
+}
+
+templ PasswordRecoveryRequestPage(email string, errors errors.FormError) {
+	@baseTemplate("Recuperar senha") {
+		<div>
+			<h1>Digite o seu email</h1>
+			<form hx-post="/login/recover" hx-target="#main">
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "email",
+					FieldValue: email,
+					InputLabel: "e-mail",
+					InputType:  "email",
+					InputAttr:  nil,
+					ErrorMsg:   errors["email"],
+				})
+				<input type="submit" value="Recuperar senha"/>
+			</form>
+		</div>
+	}
+}
+
+templ PasswordPinRecoverPage(ticket uuid.UUID) {
+	@baseTemplate("Recuperar senha") {
+		<div>
+			<p>
+				if msg := helpers.GetFlash(ctx); msg != "" {
+					<h1>{ msg }</h1>
+				}
+			</p>
+			<h1>Digite o pin enviado por email para recuperar a sua senha</h1>
+			<form
+				hx-post={ fmt.Sprintf(
+			"/login/recover?ticket=%s", ticket) }
+				hx-target="#main"
+			>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "pin",
+					FieldValue: "",
+					InputLabel: "PIN",
+					InputType:  "text",
+					InputAttr:  nil,
+					ErrorMsg:   "",
+				})
+				<input type="submit" value="Enviar PIN"/>
+			</form>
+		</div>
+	}
+}
+
+templ PasswordRecoveryPage(
+	user model.PasswordRecoverUser, errors errors.FormError, pin string) {
+	@baseTemplate("Recuperar senha") {
+		<div>
+			<h1>Crie uma nova senha</h1>
+			<p>
+				if msg := helpers.GetFlash(ctx); msg != "" {
+					<h1>{ msg }</h1>
+				}
+			</p>
+			<form
+				hx-post={ fmt.Sprintf(
+			"/login/recover?ticket=%s", user.Ticket) }
+				hx-target="#main"
+			>
+				<input style="display: none" name="pin" value={ pin }/>
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "passwd",
+						FieldValue: user.Password,
+						InputLabel: "Senha",
+						InputType:  "password",
+						InputAttr:  nil,
+						ErrorMsg:   errors["passwd"],
+					})
+				</p>
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "confpasswd",
+						FieldValue: user.ConfitmationPassword,
+						InputLabel: "Repita a senha",
+						InputType:  "password",
+						InputAttr:  nil,
+						ErrorMsg:   errors["confpasswd"],
+					})
+				</p>
+				<input type="submit" value="Recuperar senha"/>
+			</form>
+		</div>
+	}
+}
+
+templ PasswordRecoveryRetryPage(ticket uuid.UUID) {
+	@baseTemplate("Retry") {
+		<h1>Ticket expirado, gerar novo PIN para recuperar senha</h1>
+		<button
+			hx-get={ fmt.Sprintf("/login/recover/retry?ticket=%s", ticket) }
+			hx-target="#main"
+		>
+			Gerar novo token
+		</button>
+	}
+}

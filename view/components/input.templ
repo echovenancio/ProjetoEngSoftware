@@ -1,0 +1,56 @@
+package components
+
+import "fmt"
+
+type InputFieldParams struct {
+	FieldName  string
+	FieldValue string
+	InputLabel string
+	InputType  string
+	InputAttr  templ.Attributes
+	ErrorMsg   string
+}
+
+templ InputField(inputParams InputFieldParams) {
+	<label for={ inputParams.FieldName }>{ inputParams.InputLabel }</label>
+	if inputParams.ErrorMsg != "" {
+		<input
+			type={ inputParams.InputType }
+			name={ inputParams.FieldName }
+			value={ inputParams.FieldValue }
+			if inputParams.InputAttr != nil {
+				{ inputParams.InputAttr... }
+			}
+			aria-invalid="true"
+			aria-describeby={ fmt.Sprintf(
+				"%s-invalid-helper", 
+				inputParams.FieldName) }
+		/>
+		<small
+			id={ fmt.Sprintf("%s-invalid-helper", inputParams.FieldName) }
+			class="error"
+		>
+			{ inputParams.ErrorMsg }
+		</small>
+	} else if len(inputParams.FieldValue) != 0 && 
+			  inputParams.FieldValue != "0" && inputParams.ErrorMsg != "loginErr" {
+		<input
+			type={ inputParams.InputType }
+			name={ inputParams.FieldName }
+			value={ inputParams.FieldValue }
+			if inputParams.InputAttr != nil {
+				{ inputParams.InputAttr... }
+			}
+			aria-invalid="false"
+		/>
+	} else {
+		<input
+			type={ inputParams.InputType }
+			name={ inputParams.FieldName }
+			if inputParams.InputAttr != nil {
+				{ inputParams.InputAttr... }
+			}
+			value=""
+		/>
+	}
+}
