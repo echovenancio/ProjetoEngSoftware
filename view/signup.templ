@@ -1,0 +1,104 @@
+package view
+
+import "github.com/grepvenancio/biblioteca/model"
+import "github.com/grepvenancio/biblioteca/view/components"
+
+templ SignUpPage() {
+	@baseTemplate("Cadastro") {
+		<h1>Cadastro de novo usuario.</h1>
+		@SignUpForm(model.UserSignUp{}, map[string]string{})
+	}
+}
+
+templ SignUpForm(user model.UserSignUp, err map[string]string) {
+	<form hx-post="/signup" hx-target="#main" hx-target-4*="#this">
+		<fieldset>
+			<div class="grid">
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "email",
+						FieldValue: user.Email,
+						InputLabel: "e-mail",
+						InputType:  "email",
+						InputAttr:  nil,
+						ErrorMsg:   err["email"],
+					})
+				</p>
+				<p>
+					@components.InputField(components.InputFieldParams{
+						FieldName:  "name",
+						FieldValue: user.Name,
+						InputLabel: "Nome completo",
+						InputType:  "text",
+						InputAttr:  nil,
+						ErrorMsg:   err["name"],
+					})
+				</p>
+			</div>
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "passwd",
+					FieldValue: user.Passwd,
+					InputLabel: "Senha",
+					InputType:  "password",
+					InputAttr:  nil,
+					ErrorMsg:   err["passwd"],
+				})
+			</p>
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "passwd-confirmation",
+					FieldValue: user.PasswdConfirmation,
+					InputLabel: "Confirmar Senha",
+					InputType:  "password",
+					InputAttr:  nil,
+					ErrorMsg:   err["passwd-confirmation"],
+				})
+			</p>
+			<input type="submit" value="SignUp"/>
+		</fieldset>
+	</form>
+}
+
+templ ResultSignUpActionPage(result string) {
+	@baseTemplate("Cadastro") {
+		if result == "pending" {
+			<h1 class="pending">{ msg }</h1>
+		} else if result == "confirmation" {
+			<h1 class="confirmation">{ msg }</h1>
+		} else if result == "retry" {
+			<h1>Validação expirada</h1>
+			<div>
+				<input
+					name="email"
+					style="display: none"
+					type="email"
+					value={ msg }
+				/>
+				<button
+					hx-post="/signup/retry"
+					hx-include="[name='email']"
+					hx-push-url="true"
+					hx-target="#main"
+				>
+					Clique aqui para re-enviar um email de confirmação
+				</button>
+			</div>
+		} else {
+			<h1 class="fail">{ msg }</h1>
+		}
+	}
+}
+
+templ ExpiredSignUp() {
+	<section>
+		Tentativa de cadastro expirada 
+		<a href="/signup">Outra tentativa de cadastro</a>
+	</section>
+}
+
+templ PendingSignUp() {
+	<section>
+		Email de confirmação enviado, clique nele para confirmar o seu cadastro
+	</section>
+}

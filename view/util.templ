@@ -1,8 +1,9 @@
 package view
 
 import "github.com/grepvenancio/biblioteca/view/components"
+import "fmt"
 
-templ TOTPDialog(url, err string) {
+templ TOTPDialog(url string) {
 	<dialog open id="totp-dialog">
 		<article>
 			<header>
@@ -14,10 +15,10 @@ templ TOTPDialog(url, err string) {
 			<form
 				hx-post={ url }
 				hx-target="#main"
-				hx-target-4*="this"
+				hx-target-4*="#totp-input"
 			>
 				<p id="totp-input">
-					@TOTPInput(err)
+					@TOTPInput("")
 				</p>
 				<input type="submit" value="Enviar código"/>
 			</form>
@@ -34,4 +35,16 @@ templ TOTPInput(err string) {
 		InputAttr:  nil,
 		ErrorMsg:   err,
 	})
+}
+
+templ InternalServerError(msg string) {
+	<div id="err-dialog">
+		{ msg }
+	</div>
+}
+
+templ ResourceUpdated(resource string) {
+	<div id="resource-msg">
+		{ fmt.Sprintf("Recurso %s, atualizado com sucesso.", resource) }
+	</div>
 }

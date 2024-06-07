@@ -1,11 +1,7 @@
 package utils
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
-	"crypto/subtle"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"math/big"
@@ -13,40 +9,18 @@ import (
 	netmail "net/mail"
 	"os"
 	"strconv"
-	"strings"
 	"time"
 	"unicode"
 
 	"github.com/golang-jwt/jwt/v5"
 	usererrors "github.com/grepvenancio/biblioteca/errors"
 	"github.com/grepvenancio/biblioteca/model"
-	passwordvalidator "github.com/wagslane/go-password-validator"
-	"golang.org/x/crypto/argon2"
 	"gopkg.in/mail.v2"
 )
 
 const minEntropyBits = 60
 
 func SendConfirmationEmail(pendingUser model.PendingUser) error {
-	dialerHost := os.Getenv("DIALER_HOST")
-	dialerPort, err := strconv.Atoi(os.Getenv("DIALER_PORT"))
-	if err != nil {
-		panic("Error getting dialer port.")
-	}
-	dialerUsername := os.Getenv("DIALER_USERNAME")
-	dialerPassword := os.Getenv("DIALER_PASSWORD")
-	m := mail.NewMessage()
-	m.SetHeader("From", "no-reply@biblioteca.com")
-	m.SetHeader("To", pendingUser.User.Email)
-	m.SetHeader("Subject", "Confirmar cadastro na biblioteca")
-	confirmationURL := fmt.Sprintf(
-		"http://localhost:8080/signup/confirm?token=%s",
-		pendingUser.ConfirmationToken)
-	m.SetBody("text/plain", fmt.Sprintf(
-		"Confirme o seu cadastro clickando no link: %s", confirmationURL))
-	d := mail.NewDialer(dialerHost, dialerPort, dialerUsername, dialerPassword)
-	err = d.DialAndSend(m)
-	return err
 }
 
 func ChangingEmail(pendingEmailChange model.PendindEmailChange) error {

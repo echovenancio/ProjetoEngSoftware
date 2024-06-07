@@ -12,12 +12,6 @@ import (
 	"github.com/grepvenancio/biblioteca/view"
 )
 
-type UserSignUp struct {
-	Name   string `form:"name" binding:"required"`
-	Email  string `form:"email" binding:"required, email"`
-	Passwd string `form:"passwd" binding:"required, entropy"`
-}
-
 type PendingTOTPConfirmation struct {
 	Token            uuid.UUID
 	User             model.User
@@ -25,11 +19,11 @@ type PendingTOTPConfirmation struct {
 }
 
 func SignUpUserGet(c *gin.Context) {
-	component := view.SignUpUserPage(UserSignUp{}, map[string]string{})
+	component := view.SignUpPage(model.UserSignUp{}, map[string]string{})
 	render(c, component, 200)
 }
 
-func signUpUserToUser(signup UserSignUp) model.User {
+func signUpUserToUser(signup model.UserSignUp) model.User {
 	return model.User{
 		ID:               uuid.Must(uuid.NewRandom()),
 		Name:             signup.Name,
@@ -40,7 +34,7 @@ func signUpUserToUser(signup UserSignUp) model.User {
 }
 
 func SignUpUserPost(c *gin.Context) {
-	var userSignUp UserSignUp
+	var userSignUp model.UserSignUp
 	err := c.ShouldBind(&userSignUp)
 	if err != nil {
 		var ve validator.ValidationErrors
@@ -61,11 +55,11 @@ func SignUpUserPost(c *gin.Context) {
 	if old, err := store.CheckDuplicate(registerAction); err != nil {
 		if errors.Is(err, action.ErrExistsButExpired) {
 			store.Pop(old.ID)
-			component := view.ResultSignUpActionPage("expired")
+			component := view.ExpiredSignUp()
 			render(c, component, 200)
 			return
 		} else if errors.Is(err, action.ErrPendingConfirmation) {
-			component := view.ResultSignUpActionPage("pending")
+			component := view.PendingSignUp()
 			render(c, component, 200)
 			return
 		} else {
@@ -75,11 +69,11 @@ func SignUpUserPost(c *gin.Context) {
 	store.NewAction(registerAction)
 	err = sendConfirmationEmail(registerAction)
 	if err != nil {
-		component := view.ResultSignUpActionPage("fail")
-		render(c, component, 500)
+		component := view.InternalServerError("descupe tente mais tarde")
+		render(c, component, 500, "afterbegin")
 		return
 	}
-	component := view.InternalServerError()
+	component := view.PendingSignUp()
 	render(c, component, 200)
 	return
 }
@@ -104,7 +98,7 @@ func ConfirmUserRegistration(c *gin.Context) {
 	}
 	user := registerAction.Draft.(model.User)
 	if !registerAction.IsValid() {
-		component := view.ResultSignUpActionPage("expired")
+		component := view.ExpiredSignUp()
 		render(c, component, 200)
 		return
 	}

@@ -44,7 +44,43 @@ templ PreferencesPage() {
 }
 
 templ PassordPreference(
-	passwd model.PasswordRecoverUser, errors errors.FormError) {
+	passwdObject model.PasswordChangeStruct, err map[string]string) {
+	<form
+		hx-post="/user/preferences/password"
+		hx-target="#main"
+	>
+		<p>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "passwd",
+				FieldValue: passwdObject.Password,
+				InputLabel: "Senha antiga",
+				InputType:  "password",
+				InputAttr:  nil,
+				ErrorMsg:   err["passwd"],
+			})
+		</p>
+		<p>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "new-passwd",
+				FieldValue: passwdObject.NewPasswd,
+				InputLabel: "Nova Senha",
+				InputType:  "password",
+				InputAttr:  nil,
+				ErrorMsg:   err["passwd-confirmation"],
+			})
+		</p>
+		<p>
+			@components.InputField(components.InputFieldParams{
+				FieldName:  "passwd-confirmation",
+				FieldValue: passwdObject.PasswdConfirmation,
+				InputLabel: "Repita a nova Senha",
+				InputType:  "",
+				InputAttr:  nil,
+				ErrorMsg:   err["passwd-confirmation"],
+			})
+		</p>
+		<input type="submit" value="Mudar Senha"/>
+	</form>
 }
 
 templ NamePreferences(name, nameErr string) {
@@ -150,44 +186,6 @@ templ EnableMFAButton() {
 	>Habilitar TOTP</button>
 }
 
-templ SignUpUserPage(user model.UserSignUp, errors errors.FormError) {
-	@baseTemplate("Cadastro") {
-		<form hx-post="/signup" hx-target="#main">
-			@UserFieldSet(user, errors, "Cadastrar")
-		</form>
-	}
-}
-
-templ ResultSignUpActionPage(result string, msg string) {
-	@baseTemplate("Cadastro") {
-		if result == "pending" {
-			<h1 class="pending">{ msg }</h1>
-		} else if result == "confirmation" {
-			<h1 class="confirmation">{ msg }</h1>
-		} else if result == "retry" {
-			<h1>Validação expirada</h1>
-			<div>
-				<input
-					name="email"
-					style="display: none"
-					type="email"
-					value={ msg }
-				/>
-				<button
-					hx-post="/signup/retry"
-					hx-include="[name='email']"
-					hx-push-url="true"
-					hx-target="#main"
-				>
-					Clique aqui para re-enviar um email de confirmação
-				</button>
-			</div>
-		} else {
-			<h1 class="fail">{ msg }</h1>
-		}
-	}
-}
-
 templ UserHomePage() {
 	@baseTemplate("Home") {
 		<h1>Based</h1>
@@ -195,51 +193,6 @@ templ UserHomePage() {
 }
 
 templ UserFieldSet(user model.UserSignUp, errors errors.FormError, btnText string) {
-	<fieldset>
-		<div class="grid">
-			<p>
-				@components.InputField(components.InputFieldParams{
-					FieldName:  "email",
-					FieldValue: user.Email,
-					InputLabel: "e-mail",
-					InputType:  "email",
-					InputAttr:  nil,
-					ErrorMsg:   errors["email"],
-				})
-			</p>
-			<p>
-				@components.InputField(components.InputFieldParams{
-					FieldName:  "name",
-					FieldValue: user.Name,
-					InputLabel: "Nome completo",
-					InputType:  "text",
-					InputAttr:  nil,
-					ErrorMsg:   errors["name"],
-				})
-			</p>
-		</div>
-		<p>
-			@components.InputField(components.InputFieldParams{
-				FieldName:  "passwd",
-				FieldValue: user.Password,
-				InputLabel: "Senha",
-				InputType:  "password",
-				InputAttr:  nil,
-				ErrorMsg:   errors["passwd"],
-			})
-		</p>
-		<p>
-			@components.InputField(components.InputFieldParams{
-				FieldName:  "confpasswd",
-				FieldValue: user.Password,
-				InputLabel: "Confirmar Senha",
-				InputType:  "password",
-				InputAttr:  nil,
-				ErrorMsg:   errors["confpasswd"],
-			})
-		</p>
-		<input type="submit" value={ btnText }/>
-	</fieldset>
 }
 
 templ PasswordRecoveryRequestPage(email string, errors errors.FormError) {

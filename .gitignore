@@ -2,3 +2,4 @@
 /view/**/*_templ.go
 tmp/
 docker-compose-linux-x86_64
+nvim-linux64

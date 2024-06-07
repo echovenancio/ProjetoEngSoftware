@@ -24,6 +24,19 @@ var (
 	RecoverResetPasswd = "reseting password"
 )
 
+type UserSignUp struct {
+	Name               string `form:"name" binding:"required"`
+	Email              string `form:"email" binding:"required, email"`
+	Passwd             string `form:"passwd" binding:"required, entropy"`
+	PasswdConfirmation string `form:"passwd-confirmation" binding:"required, eqfield=passwd"`
+}
+
+type PasswordChangeStruct struct {
+	Passwd             string `form:"passwd" binding:"required"`
+	NewPasswd          string `form:"passwd" binding:"required, entropy, nefield=passwd"`
+	PasswdConfirmation string `form:"passwd-confirmation" binding:"required, eqfield=new-passwd"`
+}
+
 type PasswordRecoverTicket struct {
 	Ticket uuid.UUID
 	User   User

@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/a-h/templ"
@@ -17,10 +18,11 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
 	"github.com/grepvenancio/biblioteca/model"
+	"github.com/grepvenancio/biblioteca/model/action"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
-	passwordvalidator "github.com/wagslane/go-password-validator"
 	"golang.org/x/crypto/argon2"
+	"gopkg.in/mail.v2"
 )
 
 func getErrorMsg(fe validator.FieldError) string {
@@ -191,4 +193,31 @@ func hashPassword(passwd string) (string, error) {
 
 func normalizeInputField(field string) string {
 	return strings.Replace(strings.ToLower(field), " ", "-", -1)
+}
+
+func sendConfirmationEmail(action action.Action) error {
+	user, ok := action.Draft.(model.UserSignUp)
+	if !ok {
+		panic("não era o que eu esperava")
+	}
+	dialerHost := os.Getenv("DIALER_HOST")
+	dialerPort, err := strconv.Atoi(os.Getenv("DIALER_PORT"))
+	if err != nil {
+		panic("Error getting dialer port.")
+	}
+	dialerUsername := os.Getenv("DIALER_USERNAME")
+	dialerPassword := os.Getenv("DIALER_PASSWORD")
+	m := mail.NewMessage()
+	m.SetHeader("From", "no-reply@biblioteca.com")
+	m.SetHeader("To", user.Email)
+	m.SetHeader("Subject", "Confirmar cadastro na biblioteca")
+	confirmationURL := fmt.Sprintf(
+		"http://localhost:8080/signup/confirm?token=%s",
+		action.ID)
+	m.SetBody("text/plain", fmt.Sprintf(
+		"Confirme o seu cadastro clickando no link: %s", confirmationURL))
+	d := mail.NewDialer(dialerHost, dialerPort, dialerUsername, dialerPassword)
+	err = d.DialAndSend(m)
+	return err
+
 }

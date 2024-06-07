@@ -1,131 +1,178 @@
 package controller
 
-func ChangeName(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	userSession := r.Context().Value("session-struct").(model.SessionData)
-	store := r.Context().Value("store").(*model.MemoryStore)
-	_, user := store.GetUser(userSession.ID)
-	newName, formErr := utils.ParseName(r)
-	if len(formErr) != 0 {
-		view.NamePreferences(newName, formErr["name"]).Render(
-			r.Context(), w)
+import (
+	"errors"
+
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
+	"github.com/google/uuid"
+	"github.com/grepvenancio/biblioteca/model"
+	"github.com/grepvenancio/biblioteca/model/action"
+	"github.com/grepvenancio/biblioteca/view"
+	"github.com/grepvenancio/biblioteca/view/components"
+	"github.com/pquerna/otp"
+)
+
+func ChangeName(c *gin.Context) {
+	var form struct {
+		Name string `form:"name" binding:"required"`
+	}
+	session := sessions.Default(c)
+	data := getSessionData(session)
+	store := c.MustGet("store").(*model.MemoryStore)
+	user, _ := store.GetUser(data.UserID)
+	err := c.ShouldBind(&form)
+	if err != nil {
+		var ve validator.ValidationErrors
+		if errors.As(err, ve) {
+			var err string
+			for _, fe := range ve {
+				err = getErrorMsg(fe)
+			}
+			component := view.NamePreferences(form.Name, err)
+			render(c, component, 400, "outerHTML")
+		}
+	}
+	user.Name = form.Name
+	_ = store.UpdateUser(data.UserID, user)
+	component := view.ResourceUpdated("nome")
+	render(c, component, 204, "afterbegin")
+}
+
+func ChangeEmail(c *gin.Context) {
+	if c.GetHeader("HX-Trigger") == "totp-dialog" {
+		err := verifyTOTP(c)
+		if err != nil {
+			component := view.TOTPInput(err.Error())
+			render(c, component, 400)
+			return
+		}
+		session := sessions.Default(c)
+		actionID := session.Get("action").(string)
+		actionStore := c.MustGet("action-store").(*action.ActionStore)
+		store := c.MustGet("action").(*model.MemoryStore)
+		retAction, ok := actionStore.Pop(uuid.MustParse(actionID))
+		if !ok || !retAction.IsValid() {
+			component := components.Empty()
+			render(c, component, 400, "outerHTML", "totp-dialog")
+			return
+		}
+		draft, ok := retAction.Draft.(model.User)
+		if retAction.Type != action.UserUpdateAttempt || !ok {
+			panic("not login draft")
+		}
+		store.UpdateUser(draft.ID, draft)
+		component := view.ResourceUpdated("email")
+		render(c, component, 204, "afterbegin")
 		return
 	}
-	user.Name = newName
-	_ = store.UpdateUser(userSession.ID, *user)
-	// RENDER WITH UPDATED NAME
-	view.NamePreferences("", "").Render(
-		r.Context(), w)
-	return
+	var form struct {
+		Email string `form:"email" binding:"required, email"`
+	}
+	session := sessions.Default(c)
+	store := c.MustGet("action-store").(*model.MemoryStore)
+	err := c.ShouldBind(&form)
+	if err != nil {
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			var err string
+			for _, fe := range ve {
+				err = getErrorMsg(fe)
+			}
+			component := view.EmailPreferences(form.Email, err)
+			render(c, component, 400, "outerHTML")
+			return
+		}
+	}
+	data := getSessionData(session)
+	user, _ := store.GetUser(data.UserID)
+	user.Email = form.Email
+	emailChangeAction := action.NewUserUpdateAttempt(user)
+	session.Set("action", emailChangeAction.ID.String())
+	component := view.TOTPDialog("/user/preferences/email")
+	render(c, component, 200, "afterbegin")
 }
 
-func ChangeEmail(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	userSession := r.Context().Value("session-struct").(model.SessionData)
-	store := r.Context().Value("store").(*model.MemoryStore)
-	session := r.Context().Value("session").(*scs.SessionManager)
-	_, user := store.GetUser(userSession.ID)
-	newEmail, formErr := utils.ParseEmail(r)
-	if len(formErr) != 0 {
-		view.EmailPreferences(newEmail, formErr["email"]).Render(
-			r.Context(), w)
+func ChangePassword(c *gin.Context) {
+	if c.GetHeader("HX-Trigger") == "totp-dialog" {
+		err := verifyTOTP(c)
+		if err != nil {
+			component := view.TOTPInput(err.Error())
+			render(c, component, 400)
+			return
+		}
+		session := sessions.Default(c)
+		actionID := session.Get("action").(string)
+		actionStore := c.MustGet("action-store").(*action.ActionStore)
+		store := c.MustGet("action").(*model.MemoryStore)
+		retAction, ok := actionStore.Pop(uuid.MustParse(actionID))
+		if !ok || !retAction.IsValid() {
+			component := components.Empty()
+			render(c, component, 400, "outerHTML", "totp-dialog")
+			return
+		}
+		draft, ok := retAction.Draft.(model.User)
+		if retAction.Type != action.UserUpdateAttempt || !ok {
+			panic("not login draft")
+		}
+		store.UpdateUser(draft.ID, draft)
+		component := view.ResourceUpdated("senha")
+		render(c, component, 204, "afterbegin")
 		return
 	}
-	user.Email = newEmail
-	var draftedBuf bytes.Buffer
-	_ = gob.NewEncoder(&draftedBuf).Encode(*user)
-	session.Put(r.Context(), "redirect", "preferences")
-	session.Put(r.Context(), "intent", "email-pref")
-	session.Put(r.Context(), "drafted-user", draftedBuf.Bytes())
-	view.TOTPDialog("").Render(r.Context(), w)
-}
-
-func ChangePassword(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	userSession := r.Context().Value("session-struct").(model.SessionData)
-	store := r.Context().Value("store").(*model.MemoryStore)
-	_, user := store.GetUser(userSession.ID)
-	newEmail, formErr := utils.ParseEmail(r)
-	if len(formErr) != 0 {
-		// RENDER ERROR
-	}
-	user.Email = newEmail
-	_ = store.UpdateUser(userSession.ID, *user)
-	// RENDER WITH UPDATED NAME
-}
-
-
-func ConfirmEmailChange(w http.ResponseWriter, r *http.Request) {
-	r.ParseForm()
-	urlToken := r.URL.Query().Get("token")
-	ticketID, err := uuid.Parse(urlToken)
-	session := r.Context().Value("session").(*scs.SessionManager)
+	var form model.PasswordChangeStruct
+	err := c.ShouldBind(&form)
 	if err != nil {
-		session.Put(r.Context(), "flash", "ticket invalido")
-		view.UserHomePage().Render(r.Context(), w)
+		var ve validator.ValidationErrors
+		if errors.As(err, &ve) {
+			err := make(map[string]string, 0)
+			for _, fe := range ve {
+				err[normalizeInputField(fe.Field())] = getErrorMsg(fe)
+			}
+			component := view.PassordPreference(form, err)
+			render(c, component, 400, "outerHTML")
+			return
+		}
 	}
-	store := r.Context().Value("store").(*model.MemoryStore)
-	ok, _ := store.ConfirmEmailChange(ticketID)
-	if !ok {
-		session.Put(r.Context(), "flash", "erro atualizando email")
-		view.UserHomePage().Render(r.Context(), w)
-	}
-	session.Put(r.Context(), "flash", "email atualizado com sucesso") view.PreferencesPage().Render(r.Context(), w)
+	session := sessions.Default(c)
+	store := c.MustGet("action-store").(*model.MemoryStore)
+	data := getSessionData(session)
+	user, _ := store.GetUser(data.UserID)
+	user.HashedPassword, _ = hashPassword(form.NewPasswd)
+	emailChangeAction := action.NewUserUpdateAttempt(user)
+	session.Set("action", emailChangeAction.ID.String())
+	component := view.TOTPDialog("/user/preferences/password")
+	render(c, component, 200, "afterbegin")
 }
 
-func PreferencesGet(w http.ResponseWriter, r *http.Request) {
-	view.PreferencesPage().Render(r.Context(), w)
+func PreferencesGet(c *gin.Context) {
+	component := view.PreferencesPage()
+	render(c, component, 200)
 }
 
-func TOTPImage(w http.ResponseWriter, r *http.Request) {
-	store := r.Context().Value("store").(*model.MemoryStore)
-	sessionData, ok := r.Context().Value("session-struct").(model.SessionData)
-	if !ok {
-		panic("hum?")
+func EnableMFA(c *gin.Context) {
+	store := c.MustGet("action-store").(*action.ActionStore)
+	session := sessions.Default(c)
+	if actionID, ok := session.Get("action").(string); ok {
+		retAction, ok := store.Inspect(uuid.Must(uuid.Parse(actionID)))
+		if retAction.Type != action.UserUpdateAttempt {
+			store.Pop(uuid.Must(uuid.Parse(actionID)))
+			location(c, "/user/preferences")
+			return
+		}
+		if ok {
+			draft := retAction.Draft.(model.User)
+			plaintext, _ := decryptAES(draft.EncryptedTOTPUrl)
+			key, _ := otp.NewKeyFromURL(plaintext)
+			component := view.TOTPConfirmationPage(key.Secret(), "", retAction.ID)
+			render(c, component, 200)
+			return
+		}
 	}
-	ticket, ok := store.GetTOTPTicketPerUserId(sessionData.ID)
-	if !ok {
-		http.Redirect(w, r, "/preferences", http.StatusSeeOther)
-	}
-	fmt.Println(ticket.EncryptedTOTPUrl)
-	plaintext, _ := utils.DecryptAES(ticket.EncryptedTOTPUrl)
-	key, err := otp.NewKeyFromURL(plaintext)
-	if err != nil {
-		panic(err)
-	}
-	img, err := key.Image(600, 600)
-	if err != nil {
-		panic(err)
-	}
-	var buf bytes.Buffer
-	png.Encode(&buf, img)
-	imgBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
-	view.TOTPImage(imgBase64).Render(r.Context(), w)
-}
-
-func CancelTOTP(w http.ResponseWriter, r *http.Request) {
-	tokenURL := chi.URLParam(r, "token")
-	ticketID, err := uuid.Parse(tokenURL)
-	if err != nil {
-		http.Redirect(w, r, "/user/preferences", http.StatusSeeOther)
-	}
-	store := r.Context().Value("store").(*model.MemoryStore)
-	err = store.CancelTOTPTicket(ticketID)
-	if err != nil {
-		http.Redirect(w, r, "/user/preferences", http.StatusSeeOther)
-	}
-	session := r.Context().Value("session").(*scs.SessionManager)
-	session.Put(r.Context(), "flash", "habilitação de totp cancelada")
-	w.Header().Set("Hx-Push-Url", "/user/preferences")
-	view.PreferencesPage().Render(r.Context(), w)
-}
-
-func EnableMFA(w http.ResponseWriter, r *http.Request) {
-	store := r.Context().Value("store").(*model.MemoryStore)
-	sessionData, ok := r.Context().Value("session-struct").(model.SessionData)
-	if !ok {
-		panic("hum?")
-	}
+	data := getSessionData(session)
+	mfaAction := action.NewMFAction()
+	retAction := store.CheckDuplicate()
 	_, user := store.GetUser(sessionData.ID)
 	if alreadyInProcess, ok := store.GetTOTPTicketPerUserId(
 		sessionData.ID); ok {
@@ -164,6 +211,47 @@ func EnableMFA(w http.ResponseWriter, r *http.Request) {
 		"/user/preferences/totp/%s", ticketID))
 	view.TOTPConfirmationPage(
 		totpKey.Secret(), "", ticketID.String()).Render(r.Context(), w)
+}
+
+func TOTPImage(c *gin.Context) {
+	store := c.MustGet("action-store").(*model.MemoryStore)
+	session := sessions.Default(c)
+	data := getSessionData(session)
+	ticket, ok := store.GetTOTPTicketPerUserId(sessionData.ID)
+	if !ok {
+		http.Redirect(w, r, "/preferences", http.StatusSeeOther)
+	}
+	fmt.Println(ticket.EncryptedTOTPUrl)
+	plaintext, _ := utils.DecryptAES(ticket.EncryptedTOTPUrl)
+	key, err := otp.NewKeyFromURL(plaintext)
+	if err != nil {
+		panic(err)
+	}
+	img, err := key.Image(600, 600)
+	if err != nil {
+		panic(err)
+	}
+	var buf bytes.Buffer
+	png.Encode(&buf, img)
+	imgBase64 := base64.StdEncoding.EncodeToString(buf.Bytes())
+	view.TOTPImage(imgBase64).Render(r.Context(), w)
+}
+
+func CancelTOTP(w http.ResponseWriter, r *http.Request) {
+	tokenURL := chi.URLParam(r, "token")
+	ticketID, err := uuid.Parse(tokenURL)
+	if err != nil {
+		http.Redirect(w, r, "/user/preferences", http.StatusSeeOther)
+	}
+	store := r.Context().Value("store").(*model.MemoryStore)
+	err = store.CancelTOTPTicket(ticketID)
+	if err != nil {
+		http.Redirect(w, r, "/user/preferences", http.StatusSeeOther)
+	}
+	session := r.Context().Value("session").(*scs.SessionManager)
+	session.Put(r.Context(), "flash", "habilitação de totp cancelada")
+	w.Header().Set("Hx-Push-Url", "/user/preferences")
+	view.PreferencesPage().Render(r.Context(), w)
 }
 
 func ConfirmTOTP(w http.ResponseWriter, r *http.Request) {

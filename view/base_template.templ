@@ -4,7 +4,7 @@ templ baseTemplate(title string) {
 	<!DOCTYPE html>
 	<html>
 		@headTemplate(title)
-		<body hx-boost="true" id="main">
+		<body hx-boost="true" hx-target-5*="#main" hx-target-204="#main" id="main">
 			@headerTemplate()
 			<main class="container">
 				{ children... }

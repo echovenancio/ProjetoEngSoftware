@@ -5,14 +5,15 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/grepvenancio/biblioteca/controller"
+	"github.com/grepvenancio/biblioteca/model"
 )
 
 type ActionIntent string
 
 const (
-	LoginAttempt     ActionIntent = "login"
-	UserRegistration ActionIntent = "signup"
+	LoginAttempt      ActionIntent = "login"
+	UserRegistration  ActionIntent = "signup"
+	UserUpdateAttempt ActionIntent = "update"
 )
 
 type ActionError string
@@ -40,6 +41,15 @@ func NewLoginAttempt(draft any) Action {
 		Type:  LoginAttempt,
 		Draft: draft,
 		Exp:   time.Now().Add(5 * time.Minute),
+	}
+}
+
+func NewUserUpdateAttempt(draft any) Action {
+	return Action{
+		ID:    uuid.Must(uuid.NewRandom()),
+		Type:  UserUpdateAttempt,
+		Draft: draft,
+		Exp:   time.Now().Add(2 * time.Hour),
 	}
 }
 
@@ -97,10 +107,16 @@ func (s *ActionStore) MustPop(actionID uuid.UUID) Action {
 }
 
 func (s *ActionStore) CheckDuplicate(action Action) (Action, error) {
-	switch action.Draft.(type) {
-	case controller.UserSignUp:
-		if a, ok := handleSignUp(
-			action.Draft.(controller.UserSignUp), s); !ok {
+	switch action.Type {
+	case UserRegistration:
+		if a, ok := handleSignUp(action.Draft.(model.UserSignUp), s); !ok {
+			if !a.IsValid() {
+				return a, ErrExistsButExpired
+			}
+			return a, ErrPendingConfirmation
+		}
+	case UserUpdateAttempt:
+		if a, ok := handleUserUpdade(action.Draft.(model.User), s); !ok {
 			if !a.IsValid() {
 				return a, ErrExistsButExpired
 			}
@@ -112,10 +128,20 @@ func (s *ActionStore) CheckDuplicate(action Action) (Action, error) {
 	return Action{}, nil
 }
 
-func handleSignUp(user controller.UserSignUp, s *ActionStore) (Action, bool) {
+func handleSignUp(user model.UserSignUp, s *ActionStore) (Action, bool) {
 	for _, a := range s.store {
-		if reg, ok := a.Draft.(controller.UserSignUp); ok &&
+		if reg, ok := a.Draft.(model.UserSignUp); ok &&
 			user.Email == reg.Email {
+			return a, false
+		}
+	}
+	return Action{}, true
+}
+
+func handleUserUpdade(user model.User, s *ActionStore) (Action, bool) {
+	for _, a := range s.store {
+		if reg, ok := a.Draft.(model.User); ok &&
+			user.ID == reg.ID {
 			return a, false
 		}
 	}
