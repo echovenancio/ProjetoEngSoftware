@@ -154,22 +154,22 @@ func (s *MemoryStore) DeleteUser(id uuid.UUID) error {
 	return errors.New("Cannot find user in store.")
 }
 
-func (s *MemoryStore) GetUser(id uuid.UUID) (bool, *User) {
+func (s *MemoryStore) GetUser(id uuid.UUID) (User, bool) {
 	for _, user := range s.users {
 		if user.ID == id {
-			return true, &user
+			return user, true
 		}
 	}
-	return false, &User{}
+	return User{}, false
 }
 
-func (s *MemoryStore) GetUserByEmail(email string) (bool, *User) {
+func (s *MemoryStore) GetUserByEmail(email string) (User, bool) {
 	for _, user := range s.users {
 		if user.Email == email {
-			return true, &user
+			return user, true
 		}
 	}
-	return false, &User{}
+	return User{}, false
 }
 
 func (s *MemoryStore) UpdateUser(id uuid.UUID, uptadedUser User) error {

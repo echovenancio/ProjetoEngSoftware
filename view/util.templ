@@ -1,0 +1,37 @@
+package view
+
+import "github.com/grepvenancio/biblioteca/view/components"
+
+templ TOTPDialog(url, err string) {
+	<dialog open id="totp-dialog">
+		<article>
+			<header>
+				<button aria-label="Close" rel="prev"></button>
+				<p>
+					<strong>Código TOTP</strong>
+				</p>
+			</header>
+			<form
+				hx-post={ url }
+				hx-target="#main"
+				hx-target-4*="this"
+			>
+				<p id="totp-input">
+					@TOTPInput(err)
+				</p>
+				<input type="submit" value="Enviar código"/>
+			</form>
+		</article>
+	</dialog>
+}
+
+templ TOTPInput(err string) {
+	@components.InputField(components.InputFieldParams{
+		FieldName:  "totp-code",
+		FieldValue: "",
+		InputLabel: "Código TOTP",
+		InputType:  "text",
+		InputAttr:  nil,
+		ErrorMsg:   err,
+	})
+}

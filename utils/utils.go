@@ -154,37 +154,6 @@ func VerifyConfirmationToken(tokenString string) (string, error) {
 	return claims.Email, nil
 }
 
-func HashPassword(passwd string) (string, error) {
-	salt := make([]byte, 16)
-	if _, err := rand.Read(salt); err != nil {
-		return "", fmt.Errorf("failed to generate salt: %w", err)
-	}
-	hash := argon2.IDKey([]byte(passwd), salt, 1, 64*1024, 4, 32)
-	b64Hash := base64.RawStdEncoding.EncodeToString(hash)
-	b64Salt := base64.RawStdEncoding.EncodeToString(salt)
-	return fmt.Sprintf("%s:%s", b64Salt, b64Hash), nil
-}
-
-func VerifyPassword(passwd, encodedHash string) bool {
-	parts := strings.Split(encodedHash, ":")
-	salt, _ := base64.RawStdEncoding.DecodeString(parts[0])
-	expHash, _ := base64.RawStdEncoding.DecodeString(parts[1])
-	hash := argon2.IDKey([]byte(passwd), salt, 1, 64*1024, 4, 32)
-	if subtle.ConstantTimeCompare(hash, expHash) == 1 {
-		return true
-	}
-	return false
-}
-
-func CheckPasswordEntropyAndSize(
-	passwd string, formError usererrors.FormError) {
-	if len(passwd) > 64 {
-		formError["passwd"] = "senha muito grande, tamanho máximo de 64 chars"
-	} else if entropy := passwordvalidator.GetEntropy(passwd); entropy < minEntropyBits {
-		formError["passwd"] = "senha muito fraca"
-	}
-}
-
 func CheckEmail(email string, formError usererrors.FormError) {
 	if _, err := netmail.ParseAddress(email); err != nil {
 		formError["email"] = "e-mail inválido"
@@ -340,51 +309,6 @@ func ParseBookForm(r *http.Request) (model.Book, usererrors.FormError) {
 	}
 
 	return book, nil
-}
-
-func EncryptAES(plaintext []byte) (string, error) {
-	key, ok := os.LookupEnv("AES_SECRET")
-	if !ok {
-		panic("unable to find aes key")
-	}
-	fmt.Println(len([]byte(key)))
-	fmt.Printf("Chave: %s", key)
-	block, err := aes.NewCipher([]byte(key))
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonce := make([]byte, gcm.NonceSize())
-	if _, err := rand.Read(nonce); err != nil {
-		return "", err
-	}
-	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
-	return string(ciphertext), nil
-}
-
-func DecryptAES(data string) (string, error) {
-	key, ok := os.LookupEnv("AES_SECRET")
-	if !ok {
-		panic("unable to find aes key")
-	}
-	block, err := aes.NewCipher([]byte(key))
-	if err != nil {
-		return "", err
-	}
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return "", err
-	}
-	nonceSize := gcm.NonceSize()
-	nonce, cipher := data[:nonceSize], data[nonceSize:]
-	plaintext, err := gcm.Open(nil, []byte(nonce), []byte(cipher), nil)
-	if err != nil {
-		return "", err
-	}
-	return string(plaintext), nil
 }
 
 func GenPinCode(length int) (string, error) {

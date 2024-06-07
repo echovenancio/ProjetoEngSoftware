@@ -3,36 +3,34 @@ package view
 import (
 	"fmt"
 	"github.com/grepvenancio/biblioteca/model"
-	"github.com/grepvenancio/biblioteca/errors"
 	"github.com/grepvenancio/biblioteca/view/components"
 	"github.com/grepvenancio/biblioteca/view/helpers"
 )
 
-templ InsertBookPage(book model.Book, errors errors.FormError) {
+templ InsertBookPage(book model.Book, err map[string]string) {
 	@baseTemplate("Novo Livro") {
-		<form method="post" action="/books/new">
-			@BookFieldSet(book, errors, "Cadastrar Livro")
-		</form>
+		@InserBookForm(book, err)
 	}
+}
+
+templ InserBookForm(book model.Book, err map[string]string) {
+	<form hx-post="/books" hx-target="#main" hx-target-400="this">
+		@BookFieldSet(book, err, "Cadastrar Livro")
+	</form>
 }
 
 templ BookCounter(booksCount int) {
 	{ fmt.Sprintf(" (%d livros registrados) ", booksCount) }
 }
 
-templ UpdateBookPage(book model.Book, errors errors.FormError) {
+templ UpdateBookPage(book model.Book, err map[string]string) {
 	@baseTemplate("Editar Livro") {
 		<h1>Editar livro: { book.Title } </h1>
-		<form
-			hx-put={ fmt.Sprintf("/books/%s/edit", book.Isbn) }
-			hx-target="#main"
-		>
-			@BookFieldSet(book, errors, "Editar Livro")
-		</form>
+		@UpdateBookForm(book, err)
 		<button
 			style="border-color: red; width: 100%;"
 			class="pico-background-red-500"
-			hx-delete={ fmt.Sprintf("/books/%s", book.Isbn) }
+			hx-delete={ fmt.Sprintf("/books/%s", book.Isbn10) }
 			hx-confirm="Você tem certeza que deseja apagar o livro?"
 			hx-target="#main"
 			hx-push-url="true"
@@ -40,6 +38,16 @@ templ UpdateBookPage(book model.Book, errors errors.FormError) {
 			Apagar Livro
 		</button>
 	}
+}
+
+templ UpdateBookForm(book model.Book, err map[string]string) {
+	<form
+		hx-put={ fmt.Sprintf("/books/%s/edit", book.Isbn10) }
+		hx-target="#main"
+		hx-target-400="this"
+	>
+		@BookFieldSet(book, err, "Editar Livro")
+	</form>
 }
 
 templ GetBookPage(book model.Book) {
@@ -56,7 +64,7 @@ templ GetBookPage(book model.Book) {
 		</div>
 		<div>
 			<h1>{ book.Title }</h1>
-			<h3>{ book.Isbn }</h3>
+			<h3>{ book.Isbn10 }</h3>
 		</div>
 		<div>
 			<p>Nome do autor: { book.Author }</p>
@@ -66,13 +74,13 @@ templ GetBookPage(book model.Book) {
 		<div>
 			<a
 				href={ templ.SafeURL(
-				fmt.Sprintf("/books/%s/edit", book.Isbn)) }
+				fmt.Sprintf("/books/%s/edit", book.Isbn10)) }
 			>
 				Editar
 			</a>
 			<a
 				href={ templ.SafeURL(
-				fmt.Sprintf("/books/%s", book.Isbn)) }
+				fmt.Sprintf("/books/%s", book.Isbn10)) }
 			>
 				Visualizar
 			</a>
@@ -80,23 +88,27 @@ templ GetBookPage(book model.Book) {
 	}
 }
 
-templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
+templ IsbnInput(isbn, errMsg string) {
+	@components.InputField(components.InputFieldParams{
+		FieldName:  "isbn",
+		FieldValue: isbn,
+		InputLabel: "Isbn-13",
+		InputType:  "text",
+		InputAttr: templ.Attributes{
+			"id":         "isbn-input",
+			"hx-get":     "/books/get_by",
+			"hx-target":  "closest p",
+			"hx-trigger": "change, keyup delay:200ms changed",
+		},
+		ErrorMsg: errMsg,
+	})
+}
+
+templ BookFieldSet(book model.Book, err map[string]string, btnText string) {
 	<fieldset>
 		<div class="grid">
 			<p>
-				@components.InputField(components.InputFieldParams{
-					FieldName:  "isbn",
-					FieldValue: book.Isbn,
-					InputLabel: "Isbn-13",
-					InputType:  "text",
-					InputAttr: templ.Attributes{
-						"id":         "isbn-input",
-						"hx-get":     "/books/get_by",
-						"hx-target":  "closest p",
-						"hx-trigger": "change, keyup delay:200ms changed",
-					},
-					ErrorMsg: errors["isbn"],
-				})
+				@IsbnInput(book.Isbn10, err["isbn"])
 			</p>
 			<p>
 				@components.InputField(components.InputFieldParams{
@@ -105,7 +117,7 @@ templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
 					InputLabel: "Titulo do livro",
 					InputType:  "text",
 					InputAttr:  nil,
-					ErrorMsg:   errors["name"],
+					ErrorMsg:   err["name"],
 				})
 			</p>
 		</div>
@@ -117,7 +129,7 @@ templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
 					InputLabel: "Qt. Páginas",
 					InputType:  "number",
 					InputAttr:  nil,
-					ErrorMsg:   errors["pages"],
+					ErrorMsg:   err["pages"],
 				})
 			</p>
 			<p>
@@ -127,7 +139,7 @@ templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
 					InputLabel: "Autor",
 					InputType:  "text",
 					InputAttr:  nil,
-					ErrorMsg:   errors["author"],
+					ErrorMsg:   err["author"],
 				})
 			</p>
 		</div>
@@ -138,7 +150,7 @@ templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
 				InputLabel: "Gênero",
 				InputType:  "text",
 				InputAttr:  nil,
-				ErrorMsg:   errors["genre"],
+				ErrorMsg:   err["genre"],
 			})
 		</p>
 		<p>
@@ -148,14 +160,21 @@ templ BookFieldSet(book model.Book, errors errors.FormError, btnText string) {
 				InputLabel: "Editora",
 				InputType:  "text",
 				InputAttr:  nil,
-				ErrorMsg:   errors["publisher"],
+				ErrorMsg:   err["publisher"],
 			})
 		</p>
 		<input type="submit" value={ btnText }/>
 	</fieldset>
 }
 
-templ GetAllBooksPage(books []model.Book, page int, hasMoreBooks bool, query string) {
+templ ErrorMessageBox(msg string) {
+	<div id="err-msg">
+		{ msg }
+	</div>
+}
+
+templ GetAllBooksPage(books []model.Book,
+	page int, hasMoreBooks bool, query string) {
 	@baseTemplate("Get Books") {
 		if msg := helpers.GetFlash(ctx); msg != "" {
 			<section>
@@ -174,6 +193,7 @@ templ GetAllBooksPage(books []model.Book, page int, hasMoreBooks bool, query str
 				hx-get={ fmt.Sprintf("/books?page=%d", page) }
 				hx-trigger="search, keyup delay:200ms changed"
 				hx-target="tbody"
+				hx-target-error="#main"
 				hx-select="tbody tr"
 				hx-push-url="true"
 				hx-indicator="#spinner"
@@ -212,7 +232,7 @@ templ BooksTable(books []model.Book, hasMoreBooks bool, page int, query string) 
 templ BookRows(books []model.Book, hasMoreBooks bool, page int, query string) {
 	for _, book := range books {
 		<tr>
-			<td>{ book.Isbn }</td>
+			<td>{ book.Isbn10 }</td>
 			<td>{ book.Title }</td>
 			<td>{ fmt.Sprint(book.Pages) }</td>
 			<td>{ book.Author }</td>
@@ -220,7 +240,7 @@ templ BookRows(books []model.Book, hasMoreBooks bool, page int, query string) {
 			<td>
 				<a
 					href={ templ.SafeURL(
-									fmt.Sprintf("/books/%s/edit", book.Isbn)) }
+									fmt.Sprintf("/books/%s/edit", book.Isbn10)) }
 				>
 					Editar
 				</a>
@@ -228,7 +248,7 @@ templ BookRows(books []model.Book, hasMoreBooks bool, page int, query string) {
 			<td>
 				<a
 					href={ templ.SafeURL(
-									fmt.Sprintf("/books/%s", book.Isbn)) }
+									fmt.Sprintf("/books/%s", book.Isbn10)) }
 				>
 					Visualizar
 				</a>

@@ -47,38 +47,6 @@ templ PassordPreference(
 	passwd model.PasswordRecoverUser, errors errors.FormError) {
 }
 
-templ TOTPDialog(errorMsg string) {
-	<dialog open id="totp-dialog" hx-target="#totp-input">
-		<article>
-			<header>
-				<button aria-label="Close" rel="prev"></button>
-				<p>
-					<strong>Código TOTP</strong>
-				</p>
-			</header>
-			<form
-				hx-post="/user/preferences/totp/verify"
-			>
-				<p id="totp-input">
-					@TOTPInput(errorMsg)
-				</p>
-				<input type="submit" value="Enviar código"/>
-			</form>
-		</article>
-	</dialog>
-}
-
-templ TOTPInput(errorMsg string) {
-	@components.InputField(components.InputFieldParams{
-		FieldName:  "totp-code",
-		FieldValue: "",
-		InputLabel: "Código TOTP",
-		InputType:  "text",
-		InputAttr:  nil,
-		ErrorMsg:   errorMsg,
-	})
-}
-
 templ NamePreferences(name, nameErr string) {
 	<form
 		hx-put="/user/preferences/name"
@@ -223,47 +191,6 @@ templ ResultSignUpActionPage(result string, msg string) {
 templ UserHomePage() {
 	@baseTemplate("Home") {
 		<h1>Based</h1>
-	}
-}
-
-templ LoginPage(user model.UserLogin, errors errors.FormError) {
-	@baseTemplate("Login") {
-		if msg := helpers.GetFlash(ctx); msg != "" {
-			<section>
-				<mark>
-					{ msg }
-				</mark>
-			</section>
-		}
-		<form
-			hx-post="login"
-			hx-target="#main"
-			hx-swap="beforeend"
-		>
-			<fieldset>
-				<p>
-					@components.InputField(components.InputFieldParams{
-						FieldName:  "email",
-						FieldValue: user.Email,
-						InputLabel: "e-mail",
-						InputType:  "email",
-						InputAttr:  nil,
-						ErrorMsg:   "",
-					})
-				</p>
-				<p>
-					@components.InputField(components.InputFieldParams{
-						FieldName:  "passwd",
-						FieldValue: user.Password,
-						InputLabel: "Senha",
-						InputType:  "password",
-						InputAttr:  nil,
-						ErrorMsg:   "",
-					})
-				</p>
-				<input type="submit" value="Log-in"/>
-			</fieldset>
-		</form>
 	}
 }
 

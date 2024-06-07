@@ -1,0 +1,13 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - .:/app
+    ports:
+      - "8080:8080"
+      - "8025:8025"
+    command: sh -c "mailhog & air"
+    environment:
+      - GO111MODULE=on

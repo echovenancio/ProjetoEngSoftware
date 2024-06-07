@@ -1,43 +1,58 @@
 package main
 
 import (
-	"bytes"
-	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/gob"
+	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
-	"github.com/alexedwards/scs/v2"
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/memstore"
+	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
+	"github.com/go-playground/validator"
 	"github.com/grepvenancio/biblioteca/controller"
 	"github.com/grepvenancio/biblioteca/model"
 	"github.com/joho/godotenv"
 )
 
 var store *model.MemoryStore
-var sessionManager *scs.SessionManager
+var actionStore *model.ActionStore
 
 func main() {
 	err := godotenv.Load(".env")
 	if err != nil {
 		panic("Error loading .env")
 	}
+	sessionStore := memstore.NewStore([]byte("secret"))
 	store = model.NewMemoryStore()
-	sessionManager = scs.New()
-	sessionManager.Lifetime = 24 * time.Hour
-	r := chi.NewRouter()
-	fs := http.FileServer(http.Dir("static"))
-	r.Use(middleware.Logger)
-	r.Use(sessionManager.LoadAndSave)
-	r.Use(storeContext)
-	r.Use(sessionContext)
+	actionStore = model.NewActionStore()
+	if v, ok := binding.Validator.Engine().(*validator.Validate); ok {
+		v.RegisterValidation("entropy", entropy)
+	}
+	r := gin.Default()
+	r.Use(sessions.Sessions("session", sessionStore))
+	r.Use(func(c *gin.Context) {
+		c.Set("store", store)
+		c.Set("action-store", actionStore)
+		c.Next()
+	})
 	r.Use(CSPolicy)
-	r.Handle("/static/*", http.StripPrefix("/static/", fs))
-	r.Route("/", func(r chi.Router) {
+	r.Static("/static", "static")
+
+	adminGroup := r.Group("/admin").Use(UserAuth).Use(AdminAuth)
+	{
+		adminGroup.GET("/books", controller.GetAllBooks)
+		adminGroup.GET("/books/:isbn", controller.GetBook)
+		adminGroup.DELETE("/books/:isbn", controller.DeleteBook)
+		adminGroup.GET("/books:isbn/edit", controller.UpdateBookGet)
+		adminGroup.PUT("/books:isbn/edit", controller.UpdateBookPut)
+		adminGroup.PUT("/books/get_by", controller.BookIsbnGet)
+		adminGroup.PUT("/books/count", controller.BooksCountGet)
+	}
+
+	r.Group("/", func(r chi.Router) {
 		r.Get("/", controller.Home)
 		r.With(UserAuth).With(AdminAuth).Route("/admin", func(r chi.Router) {
 			r.Route("/books", func(r chi.Router) {
@@ -78,66 +93,49 @@ func main() {
 			r.Delete("/preferences/totp/{token}", controller.CancelTOTP)
 		})
 	})
-	http.ListenAndServe(":8080", r)
+	_ = r.Run(":8080")
 }
 
-func storeContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "store", store)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func Wrapper(h http.Handler) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		h.ServeHTTP(ctx.Writer, ctx.Request)
+	}
 }
 
-func sessionContext(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := context.WithValue(r.Context(), "session", sessionManager)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func CSPolicy(c *gin.Context) {
+	rngbuf := make([]byte, 16)
+	rand.Read(rngbuf)
+	nonce := base64.StdEncoding.EncodeToString(rngbuf)
+	csp := fmt.Sprintf(`script-src 'nonce-%s' 'strict-dynamic'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`, nonce)
+	c.Header("Content-Security-Policy", csp)
+	c.Set("nonce", nonce)
+	c.Next()
 }
 
-func CSPolicy(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		rngbuf := make([]byte, 16)
-		rand.Read(rngbuf)
-		nonce := base64.StdEncoding.EncodeToString(rngbuf)
-		csp := fmt.Sprintf(`script-src 'nonce-%s' 'strict-dynamic'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'`, nonce)
-		w.Header().Set("Content-Security-Policy", csp)
-		ctx := context.WithValue(r.Context(), "nonce", nonce)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
+func UserAuth(c *gin.Context) {
+	session := sessions.Default(c)
+	jsonData := session.Get("session-data")
+	if jsonData == nil {
+		c.Header("HX-Location", "/login")
+		return
+	}
+	var sessionData model.SessionData
+	_ = json.Unmarshal(jsonData.([]byte), &sessionData)
+	c.Set("session-struct", sessionData)
+	c.Next()
 }
 
-func UserAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		session := r.Context().Value("session").(*scs.SessionManager)
-		sessionData := session.Get(r.Context(), "session-data")
-		if sessionData == nil {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
+func AdminAuth(c *gin.Context) {
+	isAdmin := false
+	sessionData := c.MustGet("session-struct").(model.SessionData)
+	for _, role := range sessionData.Role {
+		if role == model.AdminRole {
+			isAdmin = true
 		}
-		sessionDataBytes, _ := sessionData.([]byte)
-		var sessionDataStruct model.SessionData
-		buffer := bytes.NewBuffer(sessionDataBytes)
-		_ = gob.NewDecoder(buffer).Decode(&sessionDataStruct)
-		ctx := context.WithValue(
-			r.Context(), "session-struct", sessionDataStruct)
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-func AdminAuth(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		isAdmin := false
-		roles := r.Context().Value("roles").([]model.Role)
-		for _, role := range roles {
-			if role == model.AdminRole {
-				isAdmin = true
-			}
-		}
-		if !isAdmin {
-			http.Redirect(w, r, "/login", http.StatusSeeOther)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	}
+	if !isAdmin {
+		c.Header("HX-Location", "/login")
+		return
+	}
+	c.Next()
 }

@@ -5,3 +5,6 @@ run:
 
 templ:
 	templ generate view/
+
+build:
+	templ generate view/; go build -o ./tmp/main cmd/main.go

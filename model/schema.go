@@ -33,12 +33,14 @@ type PasswordRecoverTicket struct {
 }
 
 type Book struct {
-	Title     string
-	Isbn      string
-	Pages     int
-	Author    string
-	Genre     string
-	Publisher string
+	Title     string `form:"title" binding:"required"`
+	Isbn13    string `form:"isbn-13" binding:"required, isbn13"`
+	Isbn10    string `form:"isbn-10" binding:"required, isbn10"`
+	Pages     int    `form:"pages" binding:"required"`
+	Author    string `form:"author" binding:"required"`
+	Genre     string `form:"genre" binding:"required"`
+	Publisher string `form:"publisher" binding:"required"`
+	Edition   string `form:"edition" binding:"required"`
 }
 
 type User struct {
@@ -57,34 +59,16 @@ type PendindEmailChange struct {
 	NewEmail string
 }
 
-type UserSignUp struct {
-	Name     string
-	Email    string
-	Password string
-}
-
-type PendingTOTPConfirmation struct {
-	Token            uuid.UUID
-	User             User
-	EncryptedTOTPUrl string
-}
-
 type PasswordRecoverUser struct {
 	Ticket               uuid.UUID
 	Password             string
 	ConfitmationPassword string
 }
 
-type UserLogin struct {
-	Email    string
-	Password string
-}
-
 type SessionData struct {
-	ID         uuid.UUID
-	Role       []Role
-	HasMfa     bool
-	PendingMFA bool
+	UserID uuid.UUID `json:"uid"`
+	Role   []Role    `json:"role"`
+	HasMfa bool      `json:"has_mfa"`
 }
 
 type MFAReason string

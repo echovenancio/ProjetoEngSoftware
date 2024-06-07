@@ -1,0 +1,50 @@
+package view
+
+import "github.com/grepvenancio/biblioteca/model"
+import "github.com/grepvenancio/biblioteca/view/helpers"
+
+templ LoginPage(user model.UserLogin, err map[string]string) {
+	@baseTemplate("Login") {
+		if msg := helpers.GetFlash(ctx); msg != "" {
+			<section>
+				<mark>
+					{ msg }
+				</mark>
+				@LoginForm(user, err)
+			</section>
+		}
+	}
+}
+
+templ LoginForm(user model.UserLogin, err map[string]string) {
+	<form
+		hx-post="login"
+		hx-target="#main"
+		hx-target-4*="this"
+		hx-swap="afterbegin"
+	>
+		<fieldset>
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "email",
+					FieldValue: user.Email,
+					InputLabel: "e-mail",
+					InputType:  "email",
+					InputAttr:  nil,
+					ErrorMsg:   "",
+				})
+			</p>
+			<p>
+				@components.InputField(components.InputFieldParams{
+					FieldName:  "passwd",
+					FieldValue: user.Password,
+					InputLabel: "Senha",
+					InputType:  "password",
+					InputAttr:  nil,
+					ErrorMsg:   "",
+				})
+			</p>
+			<input type="submit" value="Log-in"/>
+		</fieldset>
+	</form>
+}
